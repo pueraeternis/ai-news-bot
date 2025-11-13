@@ -11,11 +11,11 @@ dependencies = [
     "langchain-openai>=0.1.0",
     "langchain-community>=0.0.30",
     "langgraph>=0.0.30",
-
     # Utilities
     "pydantic-settings>=2.0.0",
     "click>=8.0.0",
     "python-dotenv>=1.0.0",
+    "feedparser>=6.0.12",
 ]
 
 [project.optional-dependencies]
