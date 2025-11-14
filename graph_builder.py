@@ -1,5 +1,9 @@
 # graph_builder.py
 
+
+from langgraph.graph import END, StateGraph
+from langgraph.graph.state import CompiledStateGraph
+
 from agents.collector_agent import collect_news
 from agents.filtering_agent import select_best_news_item
 from agents.planner_agent import create_post_plan
@@ -17,7 +21,7 @@ ERR_TRANSLATOR_FAILED = "Translator agent failed to translate the post."
 logger = get_logger(__name__)
 
 
-def collector_node(_state: AgentState) -> dict:
+def collector_node(state: AgentState) -> dict:  # noqa: ARG001
     """Node for collecting news."""
     logger.info("--- NODE: COLLECT NEWS ---")
     all_news = collect_news()
@@ -58,3 +62,26 @@ def translator_node(state: AgentState) -> dict:
     if not russian_post:
         raise ValueError(ERR_TRANSLATOR_FAILED)
     return {"russian_post": russian_post}
+
+
+def create_graph() -> CompiledStateGraph:
+    """Create and compiles a LangGraph, defining the workflow."""
+    workflow = StateGraph(AgentState)
+
+    # Add nodes to the graph
+    workflow.add_node("collector", collector_node)
+    workflow.add_node("filtering", filtering_node)
+    workflow.add_node("planner", planner_node)
+    workflow.add_node("writer", writer_node)
+    workflow.add_node("translator", translator_node)
+
+    # Define edges between nodes
+    workflow.set_entry_point("collector")  # Entry point of the graph
+    workflow.add_edge("collector", "filtering")
+    workflow.add_edge("filtering", "planner")
+    workflow.add_edge("planner", "writer")
+    workflow.add_edge("writer", "translator")
+    workflow.add_edge("translator", END)  # Exit point of the graph
+
+    # Compile the graph into an executable application
+    return workflow.compile()
