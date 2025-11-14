@@ -27,25 +27,19 @@ def process() -> None:
     initial_state = {"topic": "AI News"}
 
     click.echo("\n--- RUNNING GRAPH WORKFLOW ---")
-    final_state = None
-    for event in app.stream(initial_state):
-        final_state = event
+    final_state = app.invoke(initial_state)
 
     click.echo("--- GRAPH WORKFLOW COMPLETED ---\n")
 
-    if final_state:
-        last_node_output = next(iter(final_state.values()))
-        russian_post = last_node_output.get("russian_post")
+    if final_state and "russian_post" in final_state:
+        russian_post = final_state["russian_post"]
 
-        if russian_post:
-            click.echo("--- FINAL TELEGRAM POST (RUSSIAN) ---")
-            markdown = Markdown(russian_post)
-            console.print(markdown)
-            click.echo("--- END OF POST ---")
-        else:
-            click.echo("Failed to retrieve final post from graph state.")
+        click.echo("--- FINAL TELEGRAM POST (RUSSIAN) ---")
+        markdown = Markdown(russian_post)
+        console.print(markdown)
+        click.echo("--- END OF POST ---")
     else:
-        click.echo("Graph did not return a final state.")
+        click.echo("Failed to retrieve final post from graph state. Check the logs.")
 
 
 if __name__ == "__main__":

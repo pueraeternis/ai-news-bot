@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     LOG_ROTATION_SIZE: int = 10 * 1024 * 1024
     LOG_BACKUP_COUNT: int = 5
 
+    # Telegram
+    TELEGRAM_BOT_TOKEN: str
+    TELEGRAM_CHANNEL_ID: str
+
 
 # Create a single instance of settings for the entire application
 settings: Settings = Settings()  # pyright: ignore[reportCallIssue]
