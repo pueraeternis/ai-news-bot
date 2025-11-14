@@ -5,7 +5,7 @@ from rich.console import Console
 from rich.markdown import Markdown
 
 from core.logging import setup_logging
-from graph_builder import create_graph
+from graph.builder import create_graph
 
 console = Console()
 
