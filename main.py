@@ -4,6 +4,7 @@ import click
 from rich import print as rich_print
 
 from agents.collector_agent import collect_news
+from agents.filtering_agent import select_best_news_item
 from core.logging import setup_logging
 
 
@@ -13,8 +14,8 @@ def cli() -> None:
 
 
 @cli.command()
-def collect() -> None:
-    """Launch the news collector agent and output the results to the console."""
+def process() -> None:
+    """Run the complete process: collects news and selects the best one."""
     # 1. Set up logging. All logs will be written to a file.
     setup_logging()
 
@@ -22,12 +23,14 @@ def collect() -> None:
     click.echo("Starting news collection...")
     news_items = collect_news()
 
+    # 3. Filtering stage
+    click.echo("\nStep 2: Selecting the best news item using LLM...")
+    best_item = select_best_news_item(news_items)
+
     # 3. Output the result to the console
     if news_items:
-        click.echo(f"Successfully collected {len(news_items)} news items. Showing the first 5:")
-        # Use rich.print for nicely formatted output of Pydantic models
-        for item in news_items[:5]:
-            rich_print(item)
+        click.echo("\nThe best news item selected:")
+        rich_print(best_item)
     else:
         click.echo("No news items were collected. Check logs for details.")
 
