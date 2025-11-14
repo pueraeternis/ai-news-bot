@@ -1,5 +1,6 @@
 # graph_builder.py
 
+import asyncio
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -69,7 +70,7 @@ def translator_node(state: AgentState) -> dict:
 def publisher_node(state: AgentState) -> dict:
     """Node for publishing the post to Telegram."""
     logger.info("--- NODE: PUBLISH POST ---")
-    success = publish_to_telegram(state["russian_post"])
+    success = asyncio.run(publish_to_telegram(state["russian_post"]))
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
     # This node does not add anything to the state; it performs an action
