@@ -1,9 +1,6 @@
 # agents/planner_agent.py
 
-from langchain_core.output_parsers import StrOutputParser
-from langchain_core.prompts import ChatPromptTemplate
-from langchain_openai import ChatOpenAI
-from pydantic import SecretStr
+from openai import OpenAI
 
 from config.settings import settings
 from core.logging import get_logger
@@ -11,16 +8,11 @@ from core.models import NewsItem
 
 logger = get_logger(__name__)
 
-PLANNING_PROMPT = """
-You are a content strategist for the "AI News" Telegram channel, which targets a technical audience of developers and ML engineers.
+SYSTEM_PROMPT = """You are a content strategist for the "AI News" Telegram channel, which targets a technical audience of developers and ML engineers.
 Your task is to create a structured plan for a post based on the provided news item.
 The plan should be clear, concise, and easy for a writer to follow.
 
 **IMPORTANT:** The provided summary may contain messy HTML tags. Ignore them and extract the core information.
-
-**News Item to analyze:**
-- **Title:** {title}
-- **Summary:** {summary}
 
 **Your output must be a structured plan with the following sections:**
 
@@ -35,32 +27,51 @@ The plan should be clear, concise, and easy for a writer to follow.
     - [Optional: Create a fourth bullet point if necessary.]
 - **Conclusion:** [Write a concluding sentence that summarizes the importance of the news.]
 - **Call to Action:** [Write a question to engage the audience, related to the news topic.]
+"""
 
+USER_PROMPT_TEMPLATE = """
+**News Item to analyze:**
+- **Title:** {title}
+- **Summary:** {summary}
 """
 
 
 def create_post_plan(news_item: NewsItem | None) -> str | None:
-    """Generate a structured plan for a blog post based on a single news item."""
     if not news_item:
         logger.warning("Planner agent received an empty news item.")
         return None
 
-    llm = ChatOpenAI(
-        model=settings.LLM_MODEL_NAME,
-        temperature=0.7,  # Higher temperature for more creative titles/hooks
-        api_key=SecretStr(settings.OPENAI_API_KEY),
+    client = OpenAI(
         base_url=settings.OPENAI_API_URL,
+        api_key=settings.OPENAI_API_KEY,
     )
-    prompt = ChatPromptTemplate.from_template(PLANNING_PROMPT)
-    parser = StrOutputParser()
-    chain = prompt | llm | parser
+
+    user_prompt = USER_PROMPT_TEMPLATE.format(
+        title=news_item.title,
+        summary=news_item.summary,
+    )
 
     logger.info("Generating post plan for news item: '%s'", news_item.title)
 
     try:
-        plan = chain.invoke({"title": news_item.title, "summary": news_item.summary})
+        response = client.chat.completions.create(
+            model=settings.LLM_MODEL_NAME,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": user_prompt},
+            ],
+            temperature=settings.LLM_TEMPERATURE,
+            max_tokens=settings.LLM_MAX_TOKENS,
+        )
+
+        plan = response.choices[0].message.content
+        if not plan:
+            logger.warning("LLM returned an empty plan.")
+            return None
+
         logger.info("Successfully generated post plan.")
-        return plan
+        return plan.strip()
+
     except Exception:
         logger.exception("Failed to generate post plan for news item: '%s'", news_item.title)
         return None

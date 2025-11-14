@@ -16,9 +16,10 @@ dependencies = [
     "click>=8.0.0",
     "python-dotenv>=1.0.0",
     "feedparser>=6.0.12",
+    "rich>=14.2.0",
 ]
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
     "ruff>=0.1.0",
 ]

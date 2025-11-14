@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Generation parameters
     LLM_TEMPERATURE: float = 0.7
-    LLM_MAX_TOKENS: int = 1024
+    LLM_MAX_TOKENS: int = 4096
 
     # Default system prompt
     SYSTEM_PROMPT: str = "You are a helpful and concise AI assistant."
