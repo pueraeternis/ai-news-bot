@@ -1,7 +1,7 @@
 # tools/rss_parser.py
 
 from collections.abc import Sequence
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from time import mktime, struct_time
 from typing import TYPE_CHECKING, cast
 
@@ -12,6 +12,8 @@ from core.models import NewsItem
 
 if TYPE_CHECKING:
     from pydantic import HttpUrl
+
+NEWS_TIME_WINDOW_HOURS = 24
 
 logger = get_logger(__name__)
 
@@ -42,6 +44,21 @@ def _build_news_item(
         published_dt = None
         if published_time:
             published_dt = datetime.fromtimestamp(mktime(published_time), tz=timezone.utc)
+
+        # 1. Check if there is a date
+        if not published_time:
+            logger.debug("Skipping entry without a date from %s: '%s'", feed_url, entry.get("title", "N/A"))
+            return None
+
+        published_dt = datetime.fromtimestamp(mktime(published_time), tz=timezone.utc)
+
+        # 2. Filter by date
+        now = datetime.now(timezone.utc)
+        time_difference = now - published_dt
+
+        if time_difference > timedelta(hours=NEWS_TIME_WINDOW_HOURS):
+            logger.debug("Skipping old entry from %s (published %s ago)", feed_url, time_difference)
+            return None
 
         title = _coerce_to_str(entry.get("title"))
         link = _coerce_to_str(entry.get("link"))
