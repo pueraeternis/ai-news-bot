@@ -31,11 +31,11 @@ def process() -> None:
 
     click.echo("--- GRAPH WORKFLOW COMPLETED ---\n")
 
-    if final_state and "russian_post" in final_state:
-        russian_post = final_state["russian_post"]
+    if final_state and "final_post" in final_state:
+        final_post = final_state["final_post"]
 
-        click.echo("--- FINAL TELEGRAM POST (RUSSIAN) ---")
-        markdown = Markdown(russian_post)
+        click.echo("--- FINAL TELEGRAM POST ---")
+        markdown = Markdown(final_post)
         console.print(markdown)
         click.echo("--- END OF POST ---")
     else:

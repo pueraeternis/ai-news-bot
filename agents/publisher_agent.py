@@ -34,6 +34,7 @@ async def publish_to_telegram(post_text: str | None) -> bool:
 
     # Clean up and convert text
     clean_text = post_text.strip().strip("-").strip()
+    clean_text = re.sub(r"### > ---", "", clean_text)
     html_text = markdown_to_html(clean_text)
 
     try:

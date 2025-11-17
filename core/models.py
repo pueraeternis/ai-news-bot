@@ -25,3 +25,4 @@ class AgentState(TypedDict):
     post_plan: str
     english_post: str
     russian_post: str
+    final_post: str
