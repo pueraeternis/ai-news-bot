@@ -12,6 +12,7 @@ from agents.designer_agent import find_image_for_post
 from agents.filtering_agent import select_best_news_item
 from agents.planner_agent import create_post_plan
 from agents.publisher_agent import publish_to_telegram
+from agents.summarizer_agent import summarize_for_caption
 from agents.translator_agent import translate_post_to_russian
 from agents.writer_agent import write_post_from_plan
 from core.logging import get_logger
@@ -25,7 +26,13 @@ ERR_WRITER_FAILED = "Writer agent failed to write the post."
 ERR_TRANSLATOR_FAILED = "Translator agent failed to translate the post."
 ERR_CRITIC_FAILED = "Critic agent failed to improve the post."
 ERR_PUBLISHER_FAILED = "Publisher agent failed to send the post to Telegram."
+ERR_SUMMARIZER_FAILED = "Failed to summarize text."
 
+
+TELEGRAM_CAPTION_LIMIT = 1024
+INITIAL_SUMMARY_TOKENS = 1000
+TOKEN_DECREMENT = 100
+MIN_SUMMARY_TOKENS = 150
 
 logger = get_logger(__name__)
 
@@ -117,28 +124,57 @@ def designer_node(state: AgentState) -> dict:
     return {"image_url": image_url}
 
 
+def prepare_publication_node(state: AgentState) -> dict:
+    logger.info("--- NODE: PREPARE PUBLICATION ---")
+    final_post = state["final_post"]
+    image_url = state.get("image_url")
+
+    current_tokens = state.get("summarizer_max_tokens")
+    if current_tokens is None:
+        current_tokens = INITIAL_SUMMARY_TOKENS
+
+    publication_text = final_post
+    if image_url and len(final_post) > TELEGRAM_CAPTION_LIMIT:
+        publication_text = summarize_for_caption(final_post, current_tokens)
+
+    return {
+        "publication_text": publication_text,
+        "summarizer_max_tokens": current_tokens - TOKEN_DECREMENT,
+    }
+
+
 def publisher_node(state: AgentState) -> dict:
-    """Node for publishing the post and saving it to storage."""
     logger.info("--- NODE: PUBLISH POST ---")
     success = asyncio.run(
         publish_to_telegram(
-            post_text=state["final_post"],
+            post_text=state["publication_text"],
             image_url=state.get("image_url"),
         ),
     )
-    if not success:
-        raise ValueError(ERR_PUBLISHER_FAILED)
 
-    logger.info("Saving published article to vector storage.")
-    storage = VectorStorage()
-    selected_item: NewsItem = state["selected_news_item"]
-    storage.add_article(
-        article_id=str(selected_item.url),
-        text_to_embed=state["text_to_embed"],
-        metadata={"title": selected_item.title, "source": selected_item.source},
-    )
+    if success:
+        logger.info("Saving published article to vector storage.")
+        storage = VectorStorage()
+        selected_item: NewsItem = state["selected_news_item"]
+        storage.add_article(
+            article_id=str(selected_item.url),
+            text_to_embed=state["text_to_embed"],
+            metadata={"title": selected_item.title, "source": selected_item.source},
+        )
 
-    return {}
+    return {"publication_status": "success" if success else "fail"}
+
+
+def should_retry_publication_node(state: AgentState) -> Literal["end", "retry_summary"]:
+    if state["publication_status"] == "success":
+        return "end"
+
+    if state["summarizer_max_tokens"] < MIN_SUMMARY_TOKENS:
+        logger.error("Failed to summarize text to required length. Aborting.")
+        raise ValueError(ERR_SUMMARIZER_FAILED)
+
+    logger.warning("Publication failed. Retrying with fewer tokens.")
+    return "retry_summary"
 
 
 def create_graph() -> CompiledStateGraph:
@@ -152,24 +188,31 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_node("translator", translator_node)
     workflow.add_node("critic", critic_node)
     workflow.add_node("designer", designer_node)
+    workflow.add_node("prepare_publication", prepare_publication_node)
     workflow.add_node("publisher", publisher_node)
 
     workflow.set_entry_point("collector")
     workflow.add_edge("collector", "filtering")
     workflow.add_edge("filtering", "duplicate_check")
+
     workflow.add_conditional_edges(
         "duplicate_check",
         should_continue_node,
-        {
-            "continue": "planner",
-            "retry": "filtering",
-        },
+        {"continue": "planner", "retry": "filtering"},
     )
+
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
     workflow.add_edge("translator", "critic")
     workflow.add_edge("critic", "designer")
-    workflow.add_edge("designer", "publisher")
-    workflow.add_edge("publisher", END)
+
+    workflow.add_edge("designer", "prepare_publication")
+    workflow.add_edge("prepare_publication", "publisher")
+
+    workflow.add_conditional_edges(
+        "publisher",
+        should_retry_publication_node,
+        {"end": END, "retry_summary": "prepare_publication"},
+    )
 
     return workflow.compile()

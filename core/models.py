@@ -1,7 +1,7 @@
 # core/models.py
 
 from datetime import datetime
-from typing import TypedDict
+from typing import Literal, TypedDict
 
 from pydantic import BaseModel, HttpUrl
 
@@ -30,3 +30,6 @@ class AgentState(TypedDict):
     text_to_embed: str
     excluded_urls: list[str]
     is_duplicate: bool
+    publication_text: str
+    summarizer_max_tokens: int
+    publication_status: Literal["not_started", "success", "fail"]
