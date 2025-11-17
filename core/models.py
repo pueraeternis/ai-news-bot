@@ -28,3 +28,5 @@ class AgentState(TypedDict):
     final_post: str
     image_url: str | None
     text_to_embed: str
+    excluded_urls: list[str]
+    is_duplicate: bool

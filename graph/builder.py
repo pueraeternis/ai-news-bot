@@ -1,6 +1,7 @@
 # graph/builder.py
 
 import asyncio
+from typing import Literal
 
 from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
@@ -17,7 +18,7 @@ from core.logging import get_logger
 from core.models import AgentState, NewsItem
 from core.storage import VectorStorage
 
-ERR_FILTERING_FAILED = "Filtering agent failed to select a news item."
+ERR_FILTERING_FAILED = "Filtering agent failed to select any news item after exclusions."
 ERR_DUPLICATE_FOUND = "Duplicate article found."
 ERR_PLANNER_FAILED = "Planner agent failed to create a post plan."
 ERR_WRITER_FAILED = "Writer agent failed to write the post."
@@ -32,33 +33,43 @@ logger = get_logger(__name__)
 def collector_node(state: AgentState) -> dict:  # noqa: ARG001
     logger.info("--- NODE: COLLECT NEWS ---")
     all_news = collect_news()
-    return {"all_news_items": all_news}
+    return {"all_news_items": all_news, "excluded_urls": []}
 
 
 def filtering_node(state: AgentState) -> dict:
-    """Node for selecting the best news item."""
     logger.info("--- NODE: SELECT BEST NEWS ---")
-    selected_item = select_best_news_item(state["all_news_items"])
+    selected_item = select_best_news_item(
+        news_items=state["all_news_items"],
+        exclude_urls=state.get("excluded_urls", []),
+    )
     if not selected_item:
         raise ValueError(ERR_FILTERING_FAILED)
 
     text_to_embed = f"{selected_item.title}\n{selected_item.summary}"
-
-    return {
-        "selected_news_item": selected_item,
-        "text_to_embed": text_to_embed,
-    }
+    return {"selected_news_item": selected_item, "text_to_embed": text_to_embed}
 
 
 def duplicate_check_node(state: AgentState) -> dict:
-    """Node for checking if the article is a duplicate."""
     logger.info("--- NODE: DUPLICATE CHECK ---")
     storage = VectorStorage()
     is_duplicate = storage.is_duplicate(state["text_to_embed"])
-    if is_duplicate:
-        raise ValueError(ERR_DUPLICATE_FOUND)
 
-    return {}
+    if is_duplicate:
+        current_excluded = state["excluded_urls"]
+        new_excluded = [*current_excluded, str(state["selected_news_item"].url)]
+        return {"is_duplicate": True, "excluded_urls": new_excluded}
+
+    return {"is_duplicate": False}
+
+
+def should_continue_node(state: AgentState) -> Literal["continue", "retry"]:
+    """Determine the next step based on the duplication check."""
+    if state["is_duplicate"]:
+        logger.info("Duplicate detected. Retrying with a new selection.")
+        return "retry"
+
+    logger.info("News is unique. Proceeding to planning.")
+    return "continue"
 
 
 def planner_node(state: AgentState) -> dict:
@@ -113,7 +124,7 @@ def publisher_node(state: AgentState) -> dict:
         publish_to_telegram(
             post_text=state["final_post"],
             image_url=state.get("image_url"),
-        )
+        ),
     )
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
@@ -146,7 +157,14 @@ def create_graph() -> CompiledStateGraph:
     workflow.set_entry_point("collector")
     workflow.add_edge("collector", "filtering")
     workflow.add_edge("filtering", "duplicate_check")
-    workflow.add_edge("duplicate_check", "planner")
+    workflow.add_conditional_edges(
+        "duplicate_check",
+        should_continue_node,
+        {
+            "continue": "planner",
+            "retry": "filtering",
+        },
+    )
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
     workflow.add_edge("translator", "critic")
