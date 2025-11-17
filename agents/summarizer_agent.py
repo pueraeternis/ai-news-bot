@@ -8,7 +8,7 @@ from core.logging import get_logger
 logger = get_logger(__name__)
 
 # Telegram's maximum caption length for photo posts
-TELEGRAM_CAPTION_MAX_LENGTH = 1024
+TELEGRAM_CAPTION_MAX_LENGTH = 900
 
 SUMMARIZER_PROMPT = f"""You are an expert editor for a Telegram channel. Your task is to intelligently shorten the
 following post to a maximum of {TELEGRAM_CAPTION_MAX_LENGTH} characters to be used as a photo caption.

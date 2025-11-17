@@ -32,3 +32,6 @@ env/
 
 # Local configs
 *.log
+
+# data storage
+db

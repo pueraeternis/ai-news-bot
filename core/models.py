@@ -27,3 +27,4 @@ class AgentState(TypedDict):
     russian_post: str
     final_post: str
     image_url: str | None
+    text_to_embed: str

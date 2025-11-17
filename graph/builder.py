@@ -14,14 +14,17 @@ from agents.publisher_agent import publish_to_telegram
 from agents.translator_agent import translate_post_to_russian
 from agents.writer_agent import write_post_from_plan
 from core.logging import get_logger
-from core.models import AgentState
+from core.models import AgentState, NewsItem
+from core.storage import VectorStorage
 
 ERR_FILTERING_FAILED = "Filtering agent failed to select a news item."
+ERR_DUPLICATE_FOUND = "Duplicate article found."
 ERR_PLANNER_FAILED = "Planner agent failed to create a post plan."
 ERR_WRITER_FAILED = "Writer agent failed to write the post."
 ERR_TRANSLATOR_FAILED = "Translator agent failed to translate the post."
 ERR_CRITIC_FAILED = "Critic agent failed to improve the post."
 ERR_PUBLISHER_FAILED = "Publisher agent failed to send the post to Telegram."
+
 
 logger = get_logger(__name__)
 
@@ -33,11 +36,29 @@ def collector_node(state: AgentState) -> dict:  # noqa: ARG001
 
 
 def filtering_node(state: AgentState) -> dict:
+    """Node for selecting the best news item."""
     logger.info("--- NODE: SELECT BEST NEWS ---")
     selected_item = select_best_news_item(state["all_news_items"])
     if not selected_item:
         raise ValueError(ERR_FILTERING_FAILED)
-    return {"selected_news_item": selected_item}
+
+    text_to_embed = f"{selected_item.title}\n{selected_item.summary}"
+
+    return {
+        "selected_news_item": selected_item,
+        "text_to_embed": text_to_embed,
+    }
+
+
+def duplicate_check_node(state: AgentState) -> dict:
+    """Node for checking if the article is a duplicate."""
+    logger.info("--- NODE: DUPLICATE CHECK ---")
+    storage = VectorStorage()
+    is_duplicate = storage.is_duplicate(state["text_to_embed"])
+    if is_duplicate:
+        raise ValueError(ERR_DUPLICATE_FOUND)
+
+    return {}
 
 
 def planner_node(state: AgentState) -> dict:
@@ -86,15 +107,26 @@ def designer_node(state: AgentState) -> dict:
 
 
 def publisher_node(state: AgentState) -> dict:
+    """Node for publishing the post and saving it to storage."""
     logger.info("--- NODE: PUBLISH POST ---")
     success = asyncio.run(
         publish_to_telegram(
             post_text=state["final_post"],
             image_url=state.get("image_url"),
-        ),
+        )
     )
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
+
+    logger.info("Saving published article to vector storage.")
+    storage = VectorStorage()
+    selected_item: NewsItem = state["selected_news_item"]
+    storage.add_article(
+        article_id=str(selected_item.url),
+        text_to_embed=state["text_to_embed"],
+        metadata={"title": selected_item.title, "source": selected_item.source},
+    )
+
     return {}
 
 
@@ -103,6 +135,7 @@ def create_graph() -> CompiledStateGraph:
 
     workflow.add_node("collector", collector_node)
     workflow.add_node("filtering", filtering_node)
+    workflow.add_node("duplicate_check", duplicate_check_node)
     workflow.add_node("planner", planner_node)
     workflow.add_node("writer", writer_node)
     workflow.add_node("translator", translator_node)
@@ -112,7 +145,8 @@ def create_graph() -> CompiledStateGraph:
 
     workflow.set_entry_point("collector")
     workflow.add_edge("collector", "filtering")
-    workflow.add_edge("filtering", "planner")
+    workflow.add_edge("filtering", "duplicate_check")
+    workflow.add_edge("duplicate_check", "planner")
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
     workflow.add_edge("translator", "critic")
