@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str
     LLM_MODEL_NAME: str
 
+    VISION_API_URL: str
+    VISION_MODEL_NAME: str
+
     # Generation parameters
     LLM_TEMPERATURE: float = 0.7
     LLM_MAX_TOKENS: int = 4096

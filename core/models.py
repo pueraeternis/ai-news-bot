@@ -26,3 +26,4 @@ class AgentState(TypedDict):
     english_post: str
     russian_post: str
     final_post: str
+    image_url: str | None

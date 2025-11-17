@@ -7,6 +7,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from agents.collector_agent import collect_news
 from agents.critic_agent import critique_and_improve_post
+from agents.designer_agent import find_image_for_post
 from agents.filtering_agent import select_best_news_item
 from agents.planner_agent import create_post_plan
 from agents.publisher_agent import publish_to_telegram
@@ -74,9 +75,24 @@ def critic_node(state: AgentState) -> dict:
     return {"final_post": final_post}
 
 
+def designer_node(state: AgentState) -> dict:
+    """Node for finding a suitable image for the post."""
+    logger.info("--- NODE: FIND IMAGE ---")
+    image_url = find_image_for_post(
+        news_item=state["selected_news_item"],
+        post_text=state["final_post"],
+    )
+    return {"image_url": image_url}
+
+
 def publisher_node(state: AgentState) -> dict:
     logger.info("--- NODE: PUBLISH POST ---")
-    success = asyncio.run(publish_to_telegram(state["final_post"]))
+    success = asyncio.run(
+        publish_to_telegram(
+            post_text=state["final_post"],
+            image_url=state.get("image_url"),
+        ),
+    )
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
     return {}
@@ -91,6 +107,7 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_node("writer", writer_node)
     workflow.add_node("translator", translator_node)
     workflow.add_node("critic", critic_node)
+    workflow.add_node("designer", designer_node)
     workflow.add_node("publisher", publisher_node)
 
     workflow.set_entry_point("collector")
@@ -99,7 +116,8 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
     workflow.add_edge("translator", "critic")
-    workflow.add_edge("critic", "publisher")
+    workflow.add_edge("critic", "designer")
+    workflow.add_edge("designer", "publisher")
     workflow.add_edge("publisher", END)
 
     return workflow.compile()
