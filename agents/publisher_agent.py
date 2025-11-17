@@ -67,11 +67,11 @@ async def publish_to_telegram(post_text: str | None, image_url: str | None) -> b
         logger.info("Post successfully published to Telegram.")
         return True
 
-    except TelegramBadRequest as e:
-        logger.exception("Failed to publish to Telegram due to formatting/API error: %s", e)
+    except TelegramBadRequest:
+        logger.exception("Failed to publish to Telegram due to formatting/API error.")
         return False
-    except Exception as e:
-        logger.exception("An unexpected error occurred with aiogram: %s", e)
+    except Exception:
+        logger.exception("An unexpected error occurred with aiogram.")
         return False
     finally:
         await bot.session.close()
