@@ -59,6 +59,18 @@
         {
             "name": "Naked Science (Russian AI)",
             "url": "https://naked-science.ru/rss"
+        },
+        {
+            "name": "Ars Technica",
+            "url": "https://feeds.arstechnica.com/arstechnica/index"
+        },
+        {
+            "name": "The Guardian AI",
+            "url": "https://www.theguardian.com/technology/artificialintelligenceai/rss"
+        },
+        {
+            "name": "SyncedReview",
+            "url": "https://syncedreview.com/feed"
         }
     ]
 }

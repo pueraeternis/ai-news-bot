@@ -7,44 +7,46 @@ from core.logging import get_logger
 
 logger = get_logger(__name__)
 
-# Telegram's maximum caption length for photo posts
-TELEGRAM_CAPTION_MAX_LENGTH = 1024
 
-SUMMARIZER_PROMPT_TEMPLATE = """You are an expert editor for a Telegram channel. Your task is to intelligently shorten the
-following post to a maximum of 1024 characters to be used as a photo caption.
+SUMMARIZER_PROMPT_TEMPLATE = """You are a text processing API. Your only function is to shorten the user's text to fit a strict character limit.
 
-**Crucial rules:**
-1.  **Preserve the core message:** Do not lose the main idea or the key takeaways.
-2.  **Keep the style:** Maintain the engaging and slightly informal tone.
-3.  **MUST keep the source link:** The "Источник:" link at the end is mandatory and must be preserved exactly as is.
-4.  **Be concise:** Remove filler words, merge sentences, and rephrase where necessary to meet the character limit.
+**CRITICAL RULE:** The returned text MUST NOT exceed **{char_limit}** characters. This is a hard technical constraint. Failure to comply will result in system error.
 
-Here is the text you need to shorten:
+**Instructions:**
+1.  Analyze the provided text.
+2.  Rewrite it to be as concise as possible while preserving the main idea, key points, and style.
+3.  You MUST preserve the "Источник:" link at the end of the text.
+4.  Your entire output, including the source link and any formatting, must be less than **{char_limit}** characters.
+
+**TEXT TO PROCESS:**
 ---
 {post_text}
 ---
 
-Return ONLY the shortened text.
+Return ONLY the shortened text. Do not add any commentary or apologies.
 """
 
 
 def summarize_for_caption(post_text: str, max_tokens: int) -> str:
-    """Summarize a long post to fit into Telegram's 1024 character caption limit."""
+    """Summarize a long post to fit into Telegram's caption character limit."""
+    char_limit = int(max_tokens * 2.2)
+
     logger.info(
-        "Post is too long for a caption (%d chars). Summarizing with max_tokens=%d...",
+        "Post is too long for a caption (%d chars). Summarizing with max_tokens=%d (target chars: ~%d)...",
         len(post_text),
         max_tokens,
+        char_limit,
     )
 
     client = OpenAI(base_url=settings.OPENAI_API_URL, api_key=settings.OPENAI_API_KEY)
 
-    prompt = SUMMARIZER_PROMPT_TEMPLATE.format(post_text=post_text)
+    prompt = SUMMARIZER_PROMPT_TEMPLATE.format(post_text=post_text, char_limit=char_limit)
 
     try:
         response = client.chat.completions.create(
             model=settings.LLM_MODEL_NAME,
             messages=[
-                {"role": "system", "content": "You are an expert editor specializing in concise text for social media."},
+                {"role": "system", "content": "You are a text processing API that strictly follows length constraints."},
                 {"role": "user", "content": prompt},
             ],
             temperature=0.5,

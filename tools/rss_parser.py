@@ -13,7 +13,7 @@ from core.models import NewsItem
 if TYPE_CHECKING:
     from pydantic import HttpUrl
 
-NEWS_TIME_WINDOW_HOURS = 24
+NEWS_TIME_WINDOW_HOURS = 48
 
 logger = get_logger(__name__)
 
