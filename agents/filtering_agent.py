@@ -23,38 +23,22 @@ Return only the number without any explanations."""
 USER_PROMPT_TEMPLATE = "Here is the list of news to analyze:\n\n{news_list}"
 
 
-def select_best_news_item(
-    news_items: list[NewsItem],
-    exclude_urls: list[str] | None = None,
-) -> NewsItem | None:
-    """
-    Select the single best news item from a list, excluding specified URLs.
-    Refactored for clarity, correctness, and reduced complexity.
-    """
+def select_best_news_item(news_items: list[NewsItem]) -> NewsItem | None:
+    """Select the single best news item from a PRE-FILTERED list of candidates."""
     if not news_items:
         logger.warning("News item list is empty, skipping selection.")
         return None
 
-    # 1. Proper candidate filtering
-    candidate_items = news_items
-    if exclude_urls:
-        logger.info("Excluding %d URLs from selection.", len(exclude_urls))
-        candidate_items = [item for item in news_items if str(item.url) not in exclude_urls]
-
-    if not candidate_items:
-        logger.warning("No candidate news items left after exclusion.")
-        return None
-
-    # 2. Format ONLY the filtered list for the LLM
+    # Format the provided list of candidates for the LLM
     formatted_news = ""
-    for i, item in enumerate(candidate_items):
+    for i, item in enumerate(news_items):
         formatted_news += f"{i}. Title: {item.title}\n   Summary: {item.summary}\n\n"
 
     try:
         client = OpenAI(base_url=settings.OPENAI_API_URL, api_key=settings.OPENAI_API_KEY)
         user_prompt = USER_PROMPT_TEMPLATE.format(news_list=formatted_news)
 
-        logger.info("Asking LLM to select the best news item from %d candidates.", len(candidate_items))
+        logger.info("Asking LLM to select the best news item from %d candidates.", len(news_items))
 
         response = client.chat.completions.create(
             model=settings.LLM_MODEL_NAME,
@@ -73,13 +57,12 @@ def select_best_news_item(
 
         selected_index = int(response_content.strip())
 
-        # 3. Select from the filtered list and check the index
-        if 0 <= selected_index < len(candidate_items):
-            selected_item = candidate_items[selected_index]
+        if 0 <= selected_index < len(news_items):
+            selected_item = news_items[selected_index]
             logger.info("LLM selected news item at index %d: '%s'", selected_index, selected_item.title)
             return selected_item
 
-        logger.error("LLM returned an invalid index: %d for a list of size %d", selected_index, len(candidate_items))
+        logger.error("LLM returned an invalid index: %d for a list of size %d", selected_index, len(news_items))
         return None
 
     except Exception:

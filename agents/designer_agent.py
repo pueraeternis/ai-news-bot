@@ -1,5 +1,6 @@
 # agents/designer_agent.py
 
+import base64
 import time
 from io import BytesIO
 from urllib.parse import parse_qs, unquote, urljoin, urlparse
@@ -82,9 +83,9 @@ def _get_image_urls_from_page(page_url: str) -> list[str]:
         return []
 
 
-def _filter_images_by_size(image_urls: list[str]) -> list[str]:
-    """Filter images by minimum width."""
-    valid_urls = []
+def _filter_images_by_size(image_urls: list[str]) -> list[dict]:
+    """Download images, filters by size, and returns a list of dicts with URL and data."""
+    valid_images = []
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
     }
@@ -92,33 +93,38 @@ def _filter_images_by_size(image_urls: list[str]) -> list[str]:
         try:
             response = requests.get(url, headers=headers, stream=True, timeout=10)
             time.sleep(1)
-
             response.raise_for_status()
-            image_data = BytesIO(response.raw.read(1024 * 1024))
-            if not image_data.getvalue():
+
+            image_data_bytes = response.raw.read(5 * 1024 * 1024)
+            if not image_data_bytes:
                 continue
 
-            with Image.open(image_data) as img:
+            image_stream = BytesIO(image_data_bytes)
+            with Image.open(image_stream) as img:
                 width, _ = img.size
                 if width >= MIN_IMAGE_WIDTH:
-                    valid_urls.append(url)
+                    valid_images.append({"url": url, "data": image_data_bytes})
                     logger.info("Image %s meets width criteria (%dpx).", url, width)
         except Exception as e:
             logger.warning("Failed to process image %s: %s", url, e)
-    return valid_urls
+    return valid_images
 
 
-def _describe_single_image(url: str, vision_client: OpenAI) -> str | None:
-    """Describe a single image via the vision model, handling errors per image."""
+def _describe_single_image(image_data: bytes, vision_client: OpenAI) -> str | None:
+    """Describe a single image from its byte data."""
     try:
-        logger.info("Analyzing image: %s", url)
+        base64_image = base64.b64encode(image_data).decode("utf-8")
+
+        data_url = f"data:image/jpeg;base64,{base64_image}"
+
+        logger.info("Analyzing image (from base64 data)...")
         response = vision_client.chat.completions.create(
             model=settings.VISION_MODEL_NAME,
             messages=[
                 {
                     "role": "user",
                     "content": [
-                        {"type": "image_url", "image_url": {"url": url}},
+                        {"type": "image_url", "image_url": {"url": data_url}},
                         {"type": "text", "text": IMAGE_ANALYSIS_PROMPT},
                     ],
                 },
@@ -129,23 +135,23 @@ def _describe_single_image(url: str, vision_client: OpenAI) -> str | None:
         desc = response.choices[0].message.content
         return desc.strip() if desc else None
     except Exception:
-        logger.exception("Failed to analyze image %s during vision call", url)
+        logger.exception("Failed to analyze image during vision call")
         return None
 
 
-def _describe_and_select_image(image_urls: list[str], post_text: str) -> str | None:
+def _describe_and_select_image(valid_images: list[dict], post_text: str) -> str | None:
     """Describe images using vision model and select the best one using LLM."""
-    if not image_urls:
+    if not valid_images:
         return None
 
     vision_client = OpenAI(base_url=settings.VISION_API_URL, api_key=settings.OPENAI_API_KEY)
     text_client = OpenAI(base_url=settings.OPENAI_API_URL, api_key=settings.OPENAI_API_KEY)
 
     descriptions: list[dict[str, str]] = []
-    for url in image_urls:
-        desc = _describe_single_image(url, vision_client)
+    for image_info in valid_images:
+        desc = _describe_single_image(image_info["data"], vision_client)
         if desc:
-            descriptions.append({"url": url, "description": desc})
+            descriptions.append({"url": image_info["url"], "description": desc})
 
     if not descriptions:
         logger.warning("No images could be described.")
@@ -173,16 +179,28 @@ def _describe_and_select_image(image_urls: list[str], post_text: str) -> str | N
 
 
 def find_image_for_post(news_item: NewsItem, post_text: str) -> str | None:
-    """Search the article and select the best image for the post."""
-    logger.info("=== DESIGNER AGENT: Searching for image in article ===")
+    """Search the article and select the best image for the post, with explicit logging."""
+    logger.info("--- DESIGNER AGENT: Starting image search for article ---")
+
     all_urls = _get_image_urls_from_page(str(news_item.url))
     if not all_urls:
-        logger.warning("No image URLs found.")
+        logger.warning("--- DESIGNER AGENT FAILED: No image URLs found on the page. ---")
         return None
 
-    large_urls = _filter_images_by_size(all_urls)
-    if not large_urls:
-        logger.warning("No images met the minimum width of %dpx.", MIN_IMAGE_WIDTH)
+    valid_images = _filter_images_by_size(all_urls)
+    if not valid_images:
+        logger.warning(
+            "--- DESIGNER AGENT FAILED: Found %d images, but none met the size requirement of %dpx. ---",
+            len(all_urls),
+            MIN_IMAGE_WIDTH,
+        )
         return None
 
-    return _describe_and_select_image(large_urls, post_text)
+    best_image_url = _describe_and_select_image(valid_images, post_text)
+
+    if best_image_url:
+        logger.info("--- DESIGNER AGENT SUCCESS: Selected image: %s ---", best_image_url)
+    else:
+        logger.warning("--- DESIGNER AGENT FAILED: Images were analyzed, but none were selected as suitable by the LLM. ---")
+
+    return best_image_url

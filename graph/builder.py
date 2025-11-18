@@ -33,6 +33,7 @@ TELEGRAM_CAPTION_LIMIT = 1024
 INITIAL_SUMMARY_TOKENS = 1000
 TOKEN_DECREMENT = 100
 MIN_SUMMARY_TOKENS = 150
+MAX_CANDIDATES_FOR_LLM = 30
 
 logger = get_logger(__name__)
 
@@ -45,10 +46,17 @@ def collector_node(state: AgentState) -> dict:  # noqa: ARG001
 
 def filtering_node(state: AgentState) -> dict:
     logger.info("--- NODE: SELECT BEST NEWS ---")
-    selected_item = select_best_news_item(
-        news_items=state["all_news_items"],
-        exclude_urls=state.get("excluded_urls", []),
-    )
+
+    all_items = state["all_news_items"]
+    exclude_urls = state.get("excluded_urls", [])
+
+    candidate_items = [item for item in all_items if str(item.url) not in exclude_urls]
+    top_candidates = candidate_items[:MAX_CANDIDATES_FOR_LLM]
+
+    logger.info("Selected top %d candidates for LLM review.", len(top_candidates))
+
+    selected_item = select_best_news_item(news_items=top_candidates)
+
     if not selected_item:
         raise ValueError(ERR_FILTERING_FAILED)
 
