@@ -8,7 +8,6 @@ from langgraph.graph.state import CompiledStateGraph
 
 from agents.collector_agent import collect_news
 from agents.critic_agent import critique_and_improve_post
-from agents.designer_agent import find_image_for_post
 from agents.filtering_agent import select_best_news_item
 from agents.planner_agent import create_post_plan
 from agents.publisher_agent import publish_to_telegram
@@ -25,14 +24,8 @@ ERR_WRITER_FAILED = "Writer agent failed to write the post."
 ERR_TRANSLATOR_FAILED = "Translator agent failed to translate the post."
 ERR_CRITIC_FAILED = "Critic agent failed to improve the post."
 ERR_PUBLISHER_FAILED = "Publisher agent failed to send the post to Telegram."
-ERR_SUMMARIZER_FAILED = "Failed to summarize text."
 
-
-TELEGRAM_CAPTION_LIMIT = 1024
-INITIAL_SUMMARY_TOKENS = 900
-TOKEN_DECREMENT = 100
-MIN_SUMMARY_TOKENS = 150
-MAX_CANDIDATES_FOR_LLM = 50
+MAX_CANDIDATES_FOR_LLM = 30
 
 logger = get_logger(__name__)
 
@@ -98,7 +91,6 @@ def writer_node(state: AgentState) -> dict:
     logger.info("--- NODE: WRITE POST (EN) ---")
     english_post = write_post_from_plan(
         post_plan=state["post_plan"],
-        source_url=str(state["selected_news_item"].url),
     )
     if not english_post:
         raise ValueError(ERR_WRITER_FAILED)
@@ -121,26 +113,11 @@ def critic_node(state: AgentState) -> dict:
     return {"final_post": final_post}
 
 
-def designer_node(state: AgentState) -> dict:
-    """Node for finding a suitable image for the post."""
-    logger.info("--- NODE: FIND IMAGE ---")
-    image_url = find_image_for_post(
-        news_item=state["selected_news_item"],
-        post_text=state["final_post"],
-    )
-    return {"image_url": image_url}
-
-
 def publisher_node(state: AgentState) -> dict:
     """Node for publishing the post and saving it to storage."""
     logger.info("--- NODE: PUBLISH POST ---")
 
-    success = asyncio.run(
-        publish_to_telegram(
-            post_text=state["final_post"],
-            image_url=state.get("image_url"),
-        ),
-    )
+    success = asyncio.run(publish_to_telegram(state["final_post"]))
 
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
@@ -167,7 +144,6 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_node("writer", writer_node)
     workflow.add_node("translator", translator_node)
     workflow.add_node("critic", critic_node)
-    workflow.add_node("designer", designer_node)
     workflow.add_node("publisher", publisher_node)
 
     workflow.set_entry_point("collector")
@@ -183,9 +159,8 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
     workflow.add_edge("translator", "critic")
-    workflow.add_edge("critic", "designer")
 
-    workflow.add_edge("designer", "publisher")
+    workflow.add_edge("critic", "publisher")
     workflow.add_edge("publisher", END)
 
     return workflow.compile()

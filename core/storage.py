@@ -38,7 +38,7 @@ class VectorStorage:
         )
         logger.info("Article '%s' added to vector storage.", metadata.get("title", "N/A"))
 
-    def is_duplicate(self, text_to_embed: str, threshold: float = 0.95) -> bool:
+    def is_duplicate(self, text_to_embed: str, threshold: float = 0.80) -> bool:
         """Check if a semantically similar article already exists."""
         if self.collection.count() == 0:
             return False
@@ -46,17 +46,24 @@ class VectorStorage:
         embedding = get_embedding(text_to_embed)
         results = cast("dict[str, Any]", self.collection.query(query_embeddings=[embedding], n_results=1) or {})
 
-        distances = cast("list[list[float]]", results.get("distances", [[1.0]]))
+        if not results.get("distances") or not results["distances"][0]:
+            return False
+
+        distances = cast("list[list[float]]", results.get("distances"))
         distance = distances[0][0]
         similarity = 1 - distance
 
+        metadatas = cast("list[list[dict[str, Any]]]", results.get("metadatas", [[{}]]))
+        metadata = metadatas[0][0] or {}
+        similar_title = metadata.get("title", "Unknown")
+
+        logger.info("Similarity check: %.4f with '%s'", similarity, similar_title)
+
         if similarity > threshold:
-            metadatas = cast("list[list[dict[str, Any]]]", results.get("metadatas", [[{}]]))
-            metadata = metadatas[0][0] or {}
-            similar_title = metadata.get("title", "N/A")
             logger.warning(
-                "DUPLICATE DETECTED (Similarity: %.2f). This news is too similar to '%s'.",
+                "DUPLICATE DETECTED (Similarity: %.2f > %.2f). This news is too similar to '%s'.",
                 similarity,
+                threshold,
                 similar_title,
             )
             return True

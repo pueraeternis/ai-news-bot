@@ -17,7 +17,7 @@ class NewsItem(BaseModel):
 
 
 class AgentState(TypedDict):
-    """Defines the state of the LangGraph. This is a dictionary that is passed from one node (agent) to another."""
+    """Defines the state of the LangGraph."""
 
     topic: str
     all_news_items: list[NewsItem]
@@ -28,8 +28,6 @@ class AgentState(TypedDict):
     english_post: str
     russian_post: str
     final_post: str
-
-    image_url: str | None
 
     excluded_urls: list[str]
     is_duplicate: bool

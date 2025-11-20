@@ -1,5 +1,7 @@
 # agents/writer_agent.py
 
+# agents/writer_agent.py
+
 from openai import OpenAI
 
 from config.settings import settings
@@ -13,23 +15,17 @@ Your writing style should be engaging, clear, and technically credible, but with
 You MUST use Markdown formatting (`**bold text**`, `*italic text*`) to highlight key terms, company names, and add structure.
 Your task is to take the provided structured post plan and write a complete, polished Telegram post.
 Follow the plan's structure, but weave the points into a coherent, flowing text.
-**IMPORTANT:** At the very end of the post, add the source link in the format:
-`Source: [Link]`
 The final output should be ONLY the post text, ready for publication."""
 
 WRITING_PROMPT_USER_TEMPLATE = """
 Please write the final Telegram post based on this plan.
-Do not forget to include the source link at the end.
 
 **Post Plan:**
 {post_plan}
-
-**Source URL:**
-{source_url}
 """
 
 
-def write_post_from_plan(post_plan: str | None, source_url: str | None) -> str | None:
+def write_post_from_plan(post_plan: str | None) -> str | None:
     """Write a final, polished Telegram post based on a structured plan."""
     if not post_plan:
         logger.warning("Writer agent received an empty post plan.")
@@ -42,7 +38,6 @@ def write_post_from_plan(post_plan: str | None, source_url: str | None) -> str |
 
     user_prompt = WRITING_PROMPT_USER_TEMPLATE.format(
         post_plan=post_plan,
-        source_url=source_url,
     )
 
     logger.info("Generating final post text from plan.")

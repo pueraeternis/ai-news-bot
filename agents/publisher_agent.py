@@ -1,90 +1,87 @@
 # agents/publisher_agent.py
 
-import asyncio
 import re
 
 from aiogram import Bot
+from aiogram.exceptions import TelegramBadRequest
 
-from agents.summarizer_agent import summarize_for_caption
 from config.settings import settings
 from core.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-TELEGRAM_CAPTION_LIMIT = 900
-INITIAL_SUMMARY_TOKENS = 800
-TOKEN_DECREMENT = 75
-MAX_RETRY_ATTEMPTS = 5
+def _cleanup_markdown_artifacts(text: str) -> str:
+    """
+    Remove Markdown artifacts that don't render well in Telegram
+    (headers, separators, blockquotes) and fix spacing.
+    """
+    # 1. Base cleanup
+    clean = text.strip().strip("-").strip()
+
+    # 2. Remove headers (### Title)
+    clean = re.sub(r"^#+\s*", "", clean, flags=re.MULTILINE)
+
+    # 3. Remove horizontal rules (---) on a separate line
+    clean = re.sub(r"^\s*-{3,}\s*$", "", clean, flags=re.MULTILINE)
+
+    # 4. Remove blockquotes (>) at the start of lines
+    clean = re.sub(r"^>\s?", "", clean, flags=re.MULTILINE)
+
+    # 5. Collapse excessive newlines (3+ -> 2) to keep paragraphs neat
+    clean = re.sub(r"\n{3,}", "\n\n", clean)
+
+    return clean.strip()
 
 
 def markdown_to_html(text: str) -> str:
-    """Convert markdown text to HTML for Telegram."""
+    """Convert supported Markdown syntax to HTML for Telegram."""
+    # Escape HTML special characters first
     text = text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+    # Bold **text** -> <b>text</b>
     text = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", text)
+
+    # Italic *text* -> <i>text</i>
     text = re.sub(r"(?<!\*)\*([^*]+?)\*(?!\*)", r"<i>\1</i>", text)
+
+    # Links [text](url) -> <a href="url">text</a>
     return re.sub(r"\[(.+?)\]\((.+?)\)", r'<a href="\2">\1</a>', text)
 
 
-async def publish_to_telegram(post_text: str | None, image_url: str | None) -> bool:
+async def publish_to_telegram(post_text: str) -> bool:
+    """
+    Publish the final text post to Telegram.
+    """
     if not post_text:
         logger.error("Publisher agent received no text to publish.")
         return False
 
     bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
     chat_id = settings.TELEGRAM_CHANNEL_ID
-    clean_text = post_text.strip().strip("-").strip()
+
+    # --- Processing ---
+    clean_text = _cleanup_markdown_artifacts(post_text)
+    html_text = markdown_to_html(clean_text)
 
     try:
-        if image_url:
-            html_caption = markdown_to_html(clean_text)
-            if len(html_caption) <= TELEGRAM_CAPTION_LIMIT:
-                logger.info("Caption fits the limit. Publishing photo with full text.")
-                await bot.send_photo(chat_id=chat_id, photo=image_url, caption=html_caption, parse_mode="HTML")
-                return True
+        logger.info("Publishing text-only post to Telegram channel: %s", chat_id)
 
-            logger.info("Caption is too long. Starting summarization cycle.")
-            current_tokens = INITIAL_SUMMARY_TOKENS
+        await bot.send_message(
+            chat_id=chat_id,
+            text=html_text,
+            parse_mode="HTML",
+            disable_web_page_preview=True,
+        )
 
-            for attempt in range(MAX_RETRY_ATTEMPTS):
-                logger.info("Summarization attempt %d with max_tokens=%d", attempt + 1, current_tokens)
-
-                summarized_text = await asyncio.to_thread(summarize_for_caption, clean_text, current_tokens)
-                html_caption = markdown_to_html(summarized_text)
-
-                if len(html_caption) <= TELEGRAM_CAPTION_LIMIT:
-                    logger.info("Summarization successful. Publishing photo with caption (length: %d)", len(html_caption))
-                    await bot.send_photo(chat_id=chat_id, photo=image_url, caption=html_caption, parse_mode="HTML")
-                    return True
-
-                current_tokens -= TOKEN_DECREMENT
-
-            logger.warning(
-                "All summarization attempts failed. Switching to fallback: publishing text-only post.",
-            )
-            html_text = markdown_to_html(clean_text)
-            await bot.send_message(
-                chat_id=chat_id,
-                text=html_text,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-            )
-
-        else:
-            html_text = markdown_to_html(clean_text)
-            logger.info("Publishing text-only post.")
-            await bot.send_message(
-                chat_id=chat_id,
-                text=html_text,
-                parse_mode="HTML",
-                disable_web_page_preview=True,
-            )
-
-        logger.info("Post successfully published.")
+        logger.info("Post successfully published to Telegram.")
         return True
 
+    except TelegramBadRequest:
+        logger.exception("Failed to publish to Telegram due to API error.")
+        return False
     except Exception:
-        logger.exception("A critical error occurred in the publisher agent.")
+        logger.exception("An unexpected error occurred with aiogram.")
         return False
     finally:
         await bot.session.close()
