@@ -38,7 +38,7 @@ class VectorStorage:
         )
         logger.info("Article '%s' added to vector storage.", metadata.get("title", "N/A"))
 
-    def is_duplicate(self, text_to_embed: str, threshold: float = 0.80) -> bool:
+    def is_duplicate(self, text_to_embed: str, threshold: float = 0.70) -> bool:
         """Check if a semantically similar article already exists."""
         if self.collection.count() == 0:
             return False
