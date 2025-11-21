@@ -1,7 +1,7 @@
 services:
   ai-news-bot:
     build: .
-    image: telegram-bot
+    image: ai-bot
     container_name: ai-news-bot
 
     env_file:
