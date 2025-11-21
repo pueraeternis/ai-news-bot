@@ -1,6 +1,7 @@
 # config/settings.py
 
 import logging
+from zoneinfo import ZoneInfo
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -31,6 +32,10 @@ class Settings(BaseSettings):
     # Telegram
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_CHANNEL_ID: str
+
+    # Schedule
+    MOSCOW_TZ: ZoneInfo = ZoneInfo("Europe/Moscow")
+    POSTING_HOURS: list[int] = [8, 11, 13, 19, 22]
 
 
 # Create a single instance of settings for the entire application

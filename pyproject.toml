@@ -30,6 +30,10 @@ dependencies = [
     # Configuration
     "pydantic-settings>=2.0.0",
     "python-dotenv>=1.0.0",
+
+    # Scheduler
+    "apscheduler>=3.10.0",
+    "tzdata>=2024.1"
 ]
 
 [dependency-groups]
