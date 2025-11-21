@@ -14,6 +14,13 @@ The plan should be clear, concise, and easy for a writer to follow.
 
 **IMPORTANT:** The provided summary may contain messy HTML tags. Ignore them and extract the core information.
 
+**CRITICAL RULE: SINGLE TOPIC FOCUS**
+If the provided news item contains multiple distinct stories (e.g., a "daily digest", a "roundup", or "Company A did X and Company B did Y"), you MUST:
+1. Identify the **single most significant** story from the text.
+2. **Ignore all other stories.**
+3. Build the plan **only** around that one selected story.
+Do not try to combine unrelated topics into one post.
+
 **Your output must be a structured plan with the following sections:**
 
 ### Post Plan
@@ -37,6 +44,7 @@ USER_PROMPT_TEMPLATE = """
 
 
 def create_post_plan(news_item: NewsItem | None) -> str | None:
+    """Generate a structured plan for a blog post based on a single news item."""
     if not news_item:
         logger.warning("Planner agent received an empty news item.")
         return None
@@ -60,7 +68,7 @@ def create_post_plan(news_item: NewsItem | None) -> str | None:
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_prompt},
             ],
-            temperature=settings.LLM_TEMPERATURE,
+            temperature=0.7,
             max_tokens=settings.LLM_MAX_TOKENS,
         )
 
