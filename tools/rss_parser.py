@@ -13,7 +13,7 @@ from core.models import NewsItem
 if TYPE_CHECKING:
     from pydantic import HttpUrl
 
-NEWS_TIME_WINDOW_HOURS = 48
+NEWS_TIME_WINDOW_HOURS = 24
 
 logger = get_logger(__name__)
 
@@ -41,18 +41,17 @@ def _build_news_item(
     try:
         raw_published = entry.get("published_parsed")
         published_time = raw_published if isinstance(raw_published, struct_time) else None
-        published_dt = None
-        if published_time:
-            published_dt = datetime.fromtimestamp(mktime(published_time), tz=timezone.utc)
 
-        # 1. Check if there is a date
         if not published_time:
             logger.debug("Skipping entry without a date from %s: '%s'", feed_url, entry.get("title", "N/A"))
             return None
 
-        published_dt = datetime.fromtimestamp(mktime(published_time), tz=timezone.utc)
+        try:
+            published_dt = datetime.fromtimestamp(mktime(published_time), tz=timezone.utc)
+        except (ValueError, OverflowError) as e:
+            logger.warning("Skipping entry with invalid date from %s: %s", feed_url, e)
+            return None
 
-        # 2. Filter by date
         now = datetime.now(timezone.utc)
         time_difference = now - published_dt
 

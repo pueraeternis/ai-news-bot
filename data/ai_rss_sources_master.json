@@ -1,0 +1,215 @@
+[
+    {
+        "rubric": "🚀 Major Releases (Must-Know)",
+        "weight": 0.3,
+        "note": "Official channels of key players.",
+        "sources": [
+            {
+                "title": "OpenAI Blog",
+                "feed": "https://openai.com/blog/rss.xml"
+            },
+            {
+                "title": "Google AI Blog",
+                "feed": "https://blog.google/technology/ai/rss/"
+            },
+            {
+                "title": "Anthropic News",
+                "feed": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_anthropic_news.xml"
+            },
+            {
+                "title": "xAI Blog",
+                "feed": "https://raw.githubusercontent.com/Olshansk/rss-feeds/main/feeds/feed_xainews.xml"
+            },
+            {
+                "title": "NVIDIA Technical Blog",
+                "feed": "https://developer.nvidia.com/blog/feed"
+            },
+            {
+                "title": "Meta AI Blog",
+                "feed": "https://ai.meta.com/blog/rss.xml"
+            },
+            {
+                "title": "Microsoft AI Blog",
+                "feed": "https://devblogs.microsoft.com/ai/feed/"
+            },
+            {
+                "title": "Alibaba Cloud (Qwen)",
+                "feed": "https://www.alibabacloud.com/blog/rss"
+            }
+        ]
+    },
+    {
+        "rubric": "🛠 Open-Source Pulse (How-To)",
+        "weight": 0.2,
+        "note": "Tools and practice.",
+        "sources": [
+            {
+                "title": "Hugging Face Blog",
+                "feed": "https://huggingface.co/blog/feed.xml"
+            },
+            {
+                "title": "LangChain Blog",
+                "feed": "https://blog.langchain.dev/rss/"
+            },
+            {
+                "title": "News Smol AI",
+                "feed": "https://news.smol.ai/rss.xml"
+            },
+            {
+                "title": "Simon Willison’s Weblog",
+                "feed": "https://simonwillison.net/atom/everything/"
+            },
+            {
+                "title": "Ollama Releases",
+                "feed": "https://github.com/ollama/ollama/releases.atom"
+            },
+            {
+                "title": "Eugene Yan (ML Design)",
+                "feed": "https://eugeneyan.com/rss/"
+            },
+            {
+                "title": "KDnuggets",
+                "feed": "https://www.kdnuggets.com/feed"
+            }
+        ]
+    },
+    {
+        "rubric": "🧠 Deep Dives (Analysis)",
+        "weight": 0.15,
+        "note": "Deep analytics and science.",
+        "sources": [
+            {
+                "title": "Sebastian Raschka",
+                "feed": "https://magazine.sebastianraschka.com/feed"
+            },
+            {
+                "title": "SyncedReview",
+                "feed": "https://syncedreview.com/feed"
+            },
+            {
+                "title": "BAIR",
+                "feed": "https://bair.berkeley.edu/blog/feed.xml"
+            },
+            {
+                "title": "Lil'Log",
+                "feed": "https://lilianweng.github.io/index.xml"
+            },
+            {
+                "title": "Andrej Karpathy",
+                "feed": "https://karpathy.github.io/feed.xml"
+            },
+            {
+                "title": "The Gradient",
+                "feed": "https://thegradient.pub/rss/"
+            }
+        ]
+    },
+    {
+        "rubric": "🌍 The Big Picture (Think Pieces)",
+        "weight": 0.15,
+        "note": "Media giants and strategy.",
+        "sources": [
+            {
+                "title": "MIT Technology Review",
+                "feed": "https://www.technologyreview.com/feed/"
+            },
+            {
+                "title": "Wired AI",
+                "feed": "https://www.wired.com/feed/tag/ai/latest/rss"
+            },
+            {
+                "title": "The Decoder",
+                "feed": "https://the-decoder.com/feed/"
+            },
+            {
+                "title": "Ars Technica",
+                "feed": "https://feeds.arstechnica.com/arstechnica/index"
+            },
+            {
+                "title": "The Guardian AI",
+                "feed": "https://www.theguardian.com/technology/artificialintelligenceai/rss"
+            },
+            {
+                "title": "Naked Science (Russian AI)",
+                "feed": "https://naked-science.ru/rss"
+            },
+            {
+                "title": "Stanford HAI",
+                "feed": "https://hai.stanford.edu/rss.xml"
+            },
+            {
+                "title": "ChinAI Newsletter",
+                "feed": "https://chinai.substack.com/feed"
+            }
+        ]
+    },
+    {
+        "rubric": "📈 AI Startup of the Week",
+        "weight": 0.1,
+        "note": "Venture capital.",
+        "sources": [
+            {
+                "title": "TechCrunch AI",
+                "feed": "https://techcrunch.com/category/artificial-intelligence/feed/"
+            },
+            {
+                "title": "VentureBeat AI",
+                "feed": "https://venturebeat.com/category/ai/feed/"
+            },
+            {
+                "title": "a16z",
+                "feed": "https://a16z.com/feed/"
+            },
+            {
+                "title": "Y Combinator Blog",
+                "feed": "https://blog.ycombinator.com/category/artificial-intelligence/feed/"
+            }
+        ]
+    },
+    {
+        "rubric": "🔬 Unexpected Applications",
+        "weight": 0.05,
+        "note": "Broadening horizons.",
+        "sources": [
+            {
+                "title": "NASA Breaking News",
+                "feed": "https://www.nasa.gov/rss/dyn/breaking_news.rss"
+            },
+            {
+                "title": "Netflix TechBlog",
+                "feed": "https://netflixtechblog.com/feed"
+            },
+            {
+                "title": "Uber Engineering",
+                "feed": "https://eng.uber.com/feed/"
+            },
+            {
+                "title": "The Medical Futurist",
+                "feed": "https://medicalfuturist.com/feed/"
+            },
+            {
+                "title": "Google Research",
+                "feed": "https://research.google/blog/rss"
+            }
+        ]
+    },
+    {
+        "rubric": "📉 Myth Busting / Hype vs. Reality",
+        "weight": 0.05,
+        "note": "Critical view.",
+        "sources": [
+            {
+                "title": "AI Snake Oil",
+                "feed": "https://www.aisnakeoil.com/feed"
+            },
+            {
+                "title": "Gary Marcus",
+                "feed": "https://garymarcus.substack.com/feed"
+            },
+            {
+                "title": "AI Weirdness",
+                "feed": "https://aiweirdness.com/rss"
+            }
+        ]
+    }
+]

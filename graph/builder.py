@@ -26,20 +26,36 @@ ERR_CRITIC_FAILED = "Critic agent failed to improve the post."
 ERR_PUBLISHER_FAILED = "Publisher agent failed to send the post to Telegram."
 
 MAX_CANDIDATES_FOR_LLM = 30
+MAX_GLOBAL_RETRIES = 10
 
 logger = get_logger(__name__)
 
 
-def collector_node(state: AgentState) -> dict:  # noqa: ARG001
+def collector_node(state: AgentState) -> dict:
+    """
+    Collect news from a randomly selected rubric.
+    """
     logger.info("--- NODE: COLLECT NEWS ---")
+
+    current_retries = state.get("retry_count", 0)
     all_news = collect_news()
-    return {"all_news_items": all_news, "excluded_urls": []}
+
+    return {
+        "all_news_items": all_news,
+        "excluded_urls": state.get("excluded_urls", []),
+        "retry_count": current_retries,
+    }
 
 
 def filtering_node(state: AgentState) -> dict:
     logger.info("--- NODE: SELECT BEST NEWS ---")
 
     all_items = state["all_news_items"]
+
+    if not all_items:
+        logger.warning("Collector found no news in this rubric.")
+        return {"selected_news_item": None}
+
     exclude_urls = state.get("excluded_urls", [])
 
     candidate_items = [item for item in all_items if str(item.url) not in exclude_urls]
@@ -50,10 +66,28 @@ def filtering_node(state: AgentState) -> dict:
     selected_item = select_best_news_item(news_items=top_candidates)
 
     if not selected_item:
-        raise ValueError(ERR_FILTERING_FAILED)
+        logger.info("Filtering agent rejected all candidates or found none.")
+        return {"selected_news_item": None}
 
     text_to_embed = f"{selected_item.title}\n{selected_item.summary}"
     return {"selected_news_item": selected_item, "text_to_embed": text_to_embed}
+
+
+def should_continue_collection(state: AgentState) -> Literal["continue", "retry_rubric", "end"]:
+    """
+    Decide whether to proceed, try another rubric, or give up.
+    """
+    if state.get("selected_news_item"):
+        return "continue"
+
+    current_retries = state.get("retry_count", 0)
+
+    if current_retries < MAX_GLOBAL_RETRIES:
+        logger.info("No suitable news found. Switching rubric (Attempt %d/%d).", current_retries + 1, MAX_GLOBAL_RETRIES)
+        return "retry_rubric"
+
+    logger.error("Failed to find any suitable news after %d rubric changes. Giving up.", MAX_GLOBAL_RETRIES)
+    return "end"
 
 
 def duplicate_check_node(state: AgentState) -> dict:
@@ -69,14 +103,17 @@ def duplicate_check_node(state: AgentState) -> dict:
     return {"is_duplicate": False}
 
 
-def should_continue_node(state: AgentState) -> Literal["continue", "retry"]:
-    """Determine the next step based on the duplication check."""
+def should_continue_after_duplicate(state: AgentState) -> Literal["planner", "retry_rubric"]:
     if state["is_duplicate"]:
-        logger.info("Duplicate detected. Retrying with a new selection.")
-        return "retry"
+        logger.info("Duplicate detected. Will try another rubric/selection.")
+        return "retry_rubric"
 
     logger.info("News is unique. Proceeding to planning.")
-    return "continue"
+    return "planner"
+
+
+def increment_retry_node(state: AgentState) -> dict:
+    return {"retry_count": state["retry_count"] + 1}
 
 
 def planner_node(state: AgentState) -> dict:
@@ -139,6 +176,7 @@ def create_graph() -> CompiledStateGraph:
 
     workflow.add_node("collector", collector_node)
     workflow.add_node("filtering", filtering_node)
+    workflow.add_node("increment_retry", increment_retry_node)
     workflow.add_node("duplicate_check", duplicate_check_node)
     workflow.add_node("planner", planner_node)
     workflow.add_node("writer", writer_node)
@@ -148,18 +186,34 @@ def create_graph() -> CompiledStateGraph:
 
     workflow.set_entry_point("collector")
     workflow.add_edge("collector", "filtering")
-    workflow.add_edge("filtering", "duplicate_check")
 
+    # Logic 1: Is there a news item?
+    workflow.add_conditional_edges(
+        "filtering",
+        should_continue_collection,
+        {
+            "continue": "duplicate_check",  # News found -> check duplicates
+            "retry_rubric": "increment_retry",  # No news -> switch rubric
+            "end": END,  # Give up
+        },
+    )
+
+    # Logic 2: Retry
+    workflow.add_edge("increment_retry", "collector")
+
+    # Logic 3: Duplicate?
     workflow.add_conditional_edges(
         "duplicate_check",
-        should_continue_node,
-        {"continue": "planner", "retry": "filtering"},
+        should_continue_after_duplicate,
+        {
+            "planner": "planner",  # Unique -> continue workflow
+            "retry_rubric": "increment_retry",  # Duplicate -> switch rubric
+        },
     )
 
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
     workflow.add_edge("translator", "critic")
-
     workflow.add_edge("critic", "publisher")
     workflow.add_edge("publisher", END)
 

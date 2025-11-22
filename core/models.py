@@ -31,3 +31,5 @@ class AgentState(TypedDict):
 
     excluded_urls: list[str]
     is_duplicate: bool
+
+    retry_count: int

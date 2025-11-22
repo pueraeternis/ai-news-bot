@@ -16,29 +16,48 @@ Selection criteria:
 2. **Relevance for specialists:** Useful for developers, researchers, ML engineers.
 3. **Specificity:** Avoid overly generic or purely marketing news.
 
-Analyze the items in the user prompt and return ONLY THE INDEX of the best news item.
-For example, if the best item is the first one, return "0". If the second — "1", and so on.
-Return only the number without any explanations."""
+Here is the list of news:
+{news_list}
 
-USER_PROMPT_TEMPLATE = "Here is the list of news to analyze:\n\n{news_list}"
+**INSTRUCTIONS:**
+- Analyze these items.
+- If you find a worthy news item, return ONLY its INDEX number (e.g., "0", "1").
+- **CRITICAL:** If NONE of the news items are interesting, significant, or relevant enough, return "-1".
+- Return only the number without any explanations.
+"""
+USER_PROMPT_TEMPLATE = "{news_list}"
 
 
-def select_best_news_item(news_items: list[NewsItem]) -> NewsItem | None:
-    """Select the single best news item from a PRE-FILTERED list of candidates."""
+def select_best_news_item(
+    news_items: list[NewsItem],
+    exclude_urls: list[str] | None = None,
+) -> NewsItem | None:
+    """
+    Select the single best news item from a list.
+    Return None if no item is selected or if LLM rejects all items.
+    """
     if not news_items:
         logger.warning("News item list is empty, skipping selection.")
         return None
 
-    # Format the provided list of candidates for the LLM
+    candidate_items = news_items
+    if exclude_urls:
+        logger.info("Excluding %d URLs from selection.", len(exclude_urls))
+        candidate_items = [item for item in news_items if str(item.url) not in exclude_urls]
+
+    if not candidate_items:
+        logger.warning("No candidate news items left after exclusion.")
+        return None
+
     formatted_news = ""
-    for i, item in enumerate(news_items):
+    for i, item in enumerate(candidate_items):
         formatted_news += f"{i}. Title: {item.title}\n   Summary: {item.summary}\n\n"
 
     try:
         client = OpenAI(base_url=settings.OPENAI_API_URL, api_key=settings.OPENAI_API_KEY)
         user_prompt = USER_PROMPT_TEMPLATE.format(news_list=formatted_news)
 
-        logger.info("Asking LLM to select the best news item from %d candidates.", len(news_items))
+        logger.info("Asking LLM to select the best news item from %d candidates.", len(candidate_items))
 
         response = client.chat.completions.create(
             model=settings.LLM_MODEL_NAME,
@@ -52,17 +71,23 @@ def select_best_news_item(news_items: list[NewsItem]) -> NewsItem | None:
 
         response_content = response.choices[0].message.content
         if not response_content:
-            logger.warning("LLM returned an empty response for selection.")
+            logger.warning("LLM returned an empty response.")
             return None
 
-        selected_index = int(response_content.strip())
+        clean_content = response_content.strip()
 
-        if 0 <= selected_index < len(news_items):
-            selected_item = news_items[selected_index]
+        if clean_content == "-1":
+            logger.info("LLM decided that NONE of the news items are worthy (returned -1).")
+            return None
+
+        selected_index = int(clean_content)
+
+        if 0 <= selected_index < len(candidate_items):
+            selected_item = candidate_items[selected_index]
             logger.info("LLM selected news item at index %d: '%s'", selected_index, selected_item.title)
             return selected_item
 
-        logger.error("LLM returned an invalid index: %d for a list of size %d", selected_index, len(news_items))
+        logger.error("LLM returned an invalid index: %d", selected_index)
         return None
 
     except Exception:

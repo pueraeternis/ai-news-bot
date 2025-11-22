@@ -35,7 +35,7 @@ class Settings(BaseSettings):
 
     # Schedule
     MOSCOW_TZ: ZoneInfo = ZoneInfo("Europe/Moscow")
-    POSTING_HOURS: list[int] = [8, 11, 13, 19, 22]
+    POSTING_HOURS: list[int] = [11, 13, 16, 19, 22]
 
 
 # Create a single instance of settings for the entire application
