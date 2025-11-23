@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_CHANNEL_ID: str
 
+    # VK
+    VK_ACCESS_TOKEN: str
+    VK_GROUP_ID: int
+
     # Schedule
     MOSCOW_TZ: ZoneInfo = ZoneInfo("Europe/Moscow")
     POSTING_HOURS: list[int] = [11, 13, 16, 19, 22]

@@ -10,7 +10,7 @@ from agents.collector_agent import collect_news
 from agents.critic_agent import critique_and_improve_post
 from agents.filtering_agent import select_best_news_item
 from agents.planner_agent import create_post_plan
-from agents.publisher_agent import publish_to_telegram
+from agents.publisher_agent import publish_post
 from agents.translator_agent import translate_post_to_russian
 from agents.writer_agent import write_post_from_plan
 from core.logging import get_logger
@@ -154,7 +154,11 @@ def publisher_node(state: AgentState) -> dict:
     """Node for publishing the post and saving it to storage."""
     logger.info("--- NODE: PUBLISH POST ---")
 
-    success = asyncio.run(publish_to_telegram(state["final_post"]))
+    success = asyncio.run(
+        publish_post(
+            post_text=state["final_post"],
+        ),
+    )
 
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
