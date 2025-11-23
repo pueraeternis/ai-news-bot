@@ -33,3 +33,5 @@ class AgentState(TypedDict):
     is_duplicate: bool
 
     retry_count: int
+
+    long_read_article: str

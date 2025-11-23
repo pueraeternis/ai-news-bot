@@ -18,7 +18,7 @@ class Settings(BaseSettings):
 
     # Generation parameters
     LLM_TEMPERATURE: float = 0.7
-    LLM_MAX_TOKENS: int = 4096
+    LLM_MAX_TOKENS: int = 16384
 
     # Default system prompt
     SYSTEM_PROMPT: str = "You are a helpful and concise AI assistant."
@@ -32,6 +32,7 @@ class Settings(BaseSettings):
     # Telegram
     TELEGRAM_BOT_TOKEN: str
     TELEGRAM_CHANNEL_ID: str
+    TELEGRAM_WORK_GROUP_ID: str
 
     # VK
     VK_ACCESS_TOKEN: str

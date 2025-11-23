@@ -7,10 +7,12 @@ from langgraph.graph import END, StateGraph
 from langgraph.graph.state import CompiledStateGraph
 
 from agents.collector_agent import collect_news
-from agents.critic_agent import critique_and_improve_post
+from agents.copywriter_agent import write_long_read_article
 from agents.filtering_agent import select_best_news_item
+from agents.internal_publisher_agent import send_article_file
 from agents.planner_agent import create_post_plan
 from agents.publisher_agent import publish_post
+from agents.smm_agent import critique_and_improve_post
 from agents.translator_agent import translate_post_to_russian
 from agents.writer_agent import write_post_from_plan
 from core.logging import get_logger
@@ -22,8 +24,10 @@ ERR_DUPLICATE_FOUND = "Duplicate article found."
 ERR_PLANNER_FAILED = "Planner agent failed to create a post plan."
 ERR_WRITER_FAILED = "Writer agent failed to write the post."
 ERR_TRANSLATOR_FAILED = "Translator agent failed to translate the post."
-ERR_CRITIC_FAILED = "Critic agent failed to improve the post."
+ERR_SMM_FAILED = "SMM agent failed to improve the post."
 ERR_PUBLISHER_FAILED = "Publisher agent failed to send the post to Telegram."
+ERR_COPYWRITER_FAILED = "Copywriter agent failed to write the article."
+ERR_INTERNAL_PUB_FAILED = "Internal publisher failed to send the file."
 
 MAX_CANDIDATES_FOR_LLM = 30
 MAX_GLOBAL_RETRIES = 10
@@ -142,23 +146,20 @@ def translator_node(state: AgentState) -> dict:
     return {"russian_post": russian_post}
 
 
-def critic_node(state: AgentState) -> dict:
-    logger.info("--- NODE: CRITIQUE AND IMPROVE POST ---")
+# --- BRANCH 1: SMM ---
+
+
+def smm_node(state: AgentState) -> dict:
+    logger.info("--- NODE: SMM AGENT ---")
     final_post = critique_and_improve_post(state["russian_post"])
     if not final_post:
-        raise ValueError(ERR_CRITIC_FAILED)
+        raise ValueError(ERR_SMM_FAILED)
     return {"final_post": final_post}
 
 
 def publisher_node(state: AgentState) -> dict:
-    """Node for publishing the post and saving it to storage."""
-    logger.info("--- NODE: PUBLISH POST ---")
-
-    success = asyncio.run(
-        publish_post(
-            post_text=state["final_post"],
-        ),
-    )
+    logger.info("--- NODE: PUBLISH POST (PUBLIC) ---")
+    success = asyncio.run(publish_post(post_text=state["final_post"]))
 
     if not success:
         raise ValueError(ERR_PUBLISHER_FAILED)
@@ -171,13 +172,39 @@ def publisher_node(state: AgentState) -> dict:
         text_to_embed=state["text_to_embed"],
         metadata={"title": selected_item.title, "source": selected_item.source},
     )
+    return {}
 
+
+# --- BRANCH 2: LONG READ ---
+
+
+def copywriter_node(state: AgentState) -> dict:
+    logger.info("--- NODE: COPYWRITER (LONG READ) ---")
+    # Use the Russian translation as the basis for the long read
+    article_text = write_long_read_article(state["russian_post"])
+    if not article_text:
+        raise ValueError(ERR_COPYWRITER_FAILED)
+    return {"long_read_article": article_text}
+
+
+def internal_publisher_node(state: AgentState) -> dict:
+    logger.info("--- NODE: INTERNAL PUBLISH (FILE) ---")
+    success = asyncio.run(
+        send_article_file(
+            article_text=state["long_read_article"],
+            topic=state["selected_news_item"].title,
+        ),
+    )
+    if not success:
+        # Do not fail the whole graph if the file was not sent, since the main post might have already been published
+        logger.error(ERR_INTERNAL_PUB_FAILED)
     return {}
 
 
 def create_graph() -> CompiledStateGraph:
     workflow = StateGraph(AgentState)
 
+    # Nodes
     workflow.add_node("collector", collector_node)
     workflow.add_node("filtering", filtering_node)
     workflow.add_node("increment_retry", increment_retry_node)
@@ -185,40 +212,46 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_node("planner", planner_node)
     workflow.add_node("writer", writer_node)
     workflow.add_node("translator", translator_node)
-    workflow.add_node("critic", critic_node)
+
+    # SMM Branch
+    workflow.add_node("smm", smm_node)
     workflow.add_node("publisher", publisher_node)
 
+    # Long Read Branch
+    workflow.add_node("copywriter", copywriter_node)
+    workflow.add_node("internal_publisher", internal_publisher_node)
+
+    # Edges
     workflow.set_entry_point("collector")
     workflow.add_edge("collector", "filtering")
 
-    # Logic 1: Is there a news item?
     workflow.add_conditional_edges(
         "filtering",
         should_continue_collection,
-        {
-            "continue": "duplicate_check",  # News found -> check duplicates
-            "retry_rubric": "increment_retry",  # No news -> switch rubric
-            "end": END,  # Give up
-        },
+        {"continue": "duplicate_check", "retry_rubric": "increment_retry", "end": END},
     )
-
-    # Logic 2: Retry
     workflow.add_edge("increment_retry", "collector")
 
-    # Logic 3: Duplicate?
     workflow.add_conditional_edges(
         "duplicate_check",
         should_continue_after_duplicate,
-        {
-            "planner": "planner",  # Unique -> continue workflow
-            "retry_rubric": "increment_retry",  # Duplicate -> switch rubric
-        },
+        {"planner": "planner", "retry_rubric": "increment_retry"},
     )
 
     workflow.add_edge("planner", "writer")
     workflow.add_edge("writer", "translator")
-    workflow.add_edge("translator", "critic")
-    workflow.add_edge("critic", "publisher")
+
+    # --- BRANCHING POINT ---
+    # After the translator, the graph splits into TWO branches
+    workflow.add_edge("translator", "smm")
+    workflow.add_edge("translator", "copywriter")
+
+    # End of SMM branch
+    workflow.add_edge("smm", "publisher")
     workflow.add_edge("publisher", END)
+
+    # End of Long Read branch
+    workflow.add_edge("copywriter", "internal_publisher")
+    workflow.add_edge("internal_publisher", END)
 
     return workflow.compile()

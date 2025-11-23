@@ -1,7 +1,5 @@
 # agents/writer_agent.py
 
-# agents/writer_agent.py
-
 from openai import OpenAI
 
 from config.settings import settings

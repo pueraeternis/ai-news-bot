@@ -26,7 +26,7 @@ def run_workflow() -> None:
         initial_state = {"topic": "AI News"}
 
         logger.info("RUNNING GRAPH WORKFLOW")
-        final_state = app.invoke(initial_state)
+        final_state = app.invoke(initial_state, config={"recursion_limit": 50})
 
         logger.info("GRAPH WORKFLOW COMPLETED")
 
