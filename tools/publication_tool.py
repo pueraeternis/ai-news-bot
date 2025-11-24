@@ -1,4 +1,4 @@
-# agents/publisher_agent.py
+# tools/publication_tool.py
 
 import asyncio
 import re

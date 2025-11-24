@@ -91,10 +91,6 @@
                 "feed": "https://bair.berkeley.edu/blog/feed.xml"
             },
             {
-                "title": "Lil'Log",
-                "feed": "https://lilianweng.github.io/index.xml"
-            },
-            {
                 "title": "Andrej Karpathy",
                 "feed": "https://karpathy.github.io/feed.xml"
             },

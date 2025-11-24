@@ -11,7 +11,7 @@ from agents.copywriter_agent import write_long_read_article
 from agents.filtering_agent import select_best_news_item
 from agents.internal_publisher_agent import send_article_file
 from agents.planner_agent import create_post_plan
-from agents.publisher_agent import publish_post
+from agents.reviewer_agent import send_for_review
 from agents.smm_agent import critique_and_improve_post
 from agents.translator_agent import translate_post_to_russian
 from agents.writer_agent import write_post_from_plan
@@ -25,9 +25,9 @@ ERR_PLANNER_FAILED = "Planner agent failed to create a post plan."
 ERR_WRITER_FAILED = "Writer agent failed to write the post."
 ERR_TRANSLATOR_FAILED = "Translator agent failed to translate the post."
 ERR_SMM_FAILED = "SMM agent failed to improve the post."
-ERR_PUBLISHER_FAILED = "Publisher agent failed to send the post to Telegram."
 ERR_COPYWRITER_FAILED = "Copywriter agent failed to write the article."
 ERR_INTERNAL_PUB_FAILED = "Internal publisher failed to send the file."
+ERR_REVIEW_FAILED = "Reviewer agent failed to send post for review."
 
 MAX_CANDIDATES_FOR_LLM = 30
 MAX_GLOBAL_RETRIES = 10
@@ -157,14 +157,24 @@ def smm_node(state: AgentState) -> dict:
     return {"final_post": final_post}
 
 
-def publisher_node(state: AgentState) -> dict:
-    logger.info("--- NODE: PUBLISH POST (PUBLIC) ---")
-    success = asyncio.run(publish_post(post_text=state["final_post"]))
+def reviewer_node(state: AgentState) -> dict:
+    """Node for sending the post to admin for review AND saving to storage."""
+    logger.info("--- NODE: SEND FOR REVIEW ---")
+
+    # Send to the work chat with buttons
+    success = asyncio.run(
+        send_for_review(
+            post_text=state["final_post"],
+            news_title=state["selected_news_item"].title,
+            source_url=str(state["selected_news_item"].url),
+        ),
+    )
 
     if not success:
-        raise ValueError(ERR_PUBLISHER_FAILED)
+        raise ValueError(ERR_REVIEW_FAILED)
 
-    logger.info("Saving published article to vector storage.")
+    # Immediately save to the database (the news item is considered processed)
+    logger.info("Saving processed article to vector storage (pre-publication).")
     storage = VectorStorage()
     selected_item: NewsItem = state["selected_news_item"]
     storage.add_article(
@@ -172,6 +182,7 @@ def publisher_node(state: AgentState) -> dict:
         text_to_embed=state["text_to_embed"],
         metadata={"title": selected_item.title, "source": selected_item.source},
     )
+
     return {}
 
 
@@ -215,7 +226,7 @@ def create_graph() -> CompiledStateGraph:
 
     # SMM Branch
     workflow.add_node("smm", smm_node)
-    workflow.add_node("publisher", publisher_node)
+    workflow.add_node("reviewer", reviewer_node)
 
     # Long Read Branch
     workflow.add_node("copywriter", copywriter_node)
@@ -247,8 +258,8 @@ def create_graph() -> CompiledStateGraph:
     workflow.add_edge("translator", "copywriter")
 
     # End of SMM branch
-    workflow.add_edge("smm", "publisher")
-    workflow.add_edge("publisher", END)
+    workflow.add_edge("smm", "reviewer")
+    workflow.add_edge("reviewer", END)
 
     # End of Long Read branch
     workflow.add_edge("copywriter", "internal_publisher")
