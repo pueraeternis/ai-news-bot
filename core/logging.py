@@ -7,10 +7,10 @@ from pathlib import Path
 from config.settings import settings
 
 
-def setup_logging() -> None:
+def setup_logging(*, console: bool = False) -> None:
     """
     Configure logging for the entire application.
-    Write logs to a file based on settings and output nothing to the console.
+    Always writes to a file; optionally mirrors logs to stderr (manual runs).
     """
     root_logger = logging.getLogger()
     root_logger.setLevel(settings.LOG_LEVEL)
@@ -29,8 +29,12 @@ def setup_logging() -> None:
         backupCount=settings.LOG_BACKUP_COUNT,
     )
     file_handler.setFormatter(formatter)
-
     root_logger.addHandler(file_handler)
+
+    if console:
+        console_handler = logging.StreamHandler()
+        console_handler.setFormatter(formatter)
+        root_logger.addHandler(console_handler)
 
 
 def get_logger(name: str) -> logging.Logger:

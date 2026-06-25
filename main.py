@@ -14,6 +14,7 @@ from apscheduler.triggers.cron import CronTrigger
 from config.settings import settings
 from core.logging import get_logger, setup_logging
 from core.state_storage import StateStorage
+from core.workflow_progress import print_node_complete, print_workflow_end, print_workflow_start
 from graph.builder import create_graph
 from tools.publication_tool import markdown_to_html, publish_post
 
@@ -24,7 +25,21 @@ dp = Dispatcher()
 
 
 # --- WORKFLOW EXECUTION FUNCTION ---
-async def run_workflow() -> None:
+
+
+def _run_graph(app, initial_state: dict, *, verbose: bool) -> None:
+    config = {"recursion_limit": 50}
+    if verbose:
+        print_workflow_start()
+        for event in app.stream(initial_state, config):
+            for node_name, update in event.items():
+                print_node_complete(node_name, update)
+        return
+
+    app.invoke(initial_state, config)
+
+
+async def run_workflow(*, verbose: bool = False) -> None:
     """
     Execute a single iteration of the news collection and publishing workflow.
     """
@@ -36,12 +51,16 @@ async def run_workflow() -> None:
         logger.info("RUNNING GRAPH WORKFLOW")
 
         # Run the synchronous graph in a thread to avoid blocking the bot
-        await asyncio.to_thread(app.invoke, initial_state, {"recursion_limit": 50})
+        await asyncio.to_thread(_run_graph, app, initial_state, verbose=verbose)
 
         logger.info("GRAPH WORKFLOW COMPLETED (Result sent for review)")
+        if verbose:
+            print_workflow_end(success=True)
 
-    except Exception:
+    except Exception as e:
         logger.exception("Critical error during workflow execution")
+        if verbose:
+            print_workflow_end(success=False, error=str(e))
 
     logger.info("--- WORKFLOW FINISHED ---")
 
@@ -160,13 +179,14 @@ async def start_scheduler_and_bot() -> None:
 
 
 def main() -> None:
-    setup_logging()
+    is_daemon = len(sys.argv) > 1 and sys.argv[1] == "start"
+    setup_logging(console=not is_daemon)
 
-    if len(sys.argv) > 1 and sys.argv[1] == "start":
+    if is_daemon:
         asyncio.run(start_scheduler_and_bot())
     else:
-        print("🚀 Manual run mode...")
-        asyncio.run(run_workflow())
+        print("🚀 Manual run mode — progress below (details also in logs/bot.log)\n")
+        asyncio.run(run_workflow(verbose=True))
 
 
 if __name__ == "__main__":
