@@ -29,7 +29,7 @@ def _select_rubric(rubrics: list[dict]) -> dict | None:
         return None
 
     weights = [r.get("weight", 1.0) for r in rubrics]
-    selected_rubric = random.choices(rubrics, weights=weights, k=1)[0]  # noqa: S311
+    selected_rubric = random.choices(rubrics, weights=weights, k=1)[0]
 
     logger.info(
         "🎯 Selected Rubric: '%s' (Weight: %.2f)",
