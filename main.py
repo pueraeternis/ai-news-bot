@@ -179,13 +179,12 @@ async def start_scheduler_and_bot() -> None:
 
 
 def main() -> None:
-    is_daemon = len(sys.argv) > 1 and sys.argv[1] == "start"
-    setup_logging(console=not is_daemon)
+    setup_logging()
 
-    if is_daemon:
+    if len(sys.argv) > 1 and sys.argv[1] == "start":
         asyncio.run(start_scheduler_and_bot())
     else:
-        print("🚀 Manual run mode — progress below (details also in logs/bot.log)\n")
+        print("🚀 Manual run mode\n")
         asyncio.run(run_workflow(verbose=True))
 
 

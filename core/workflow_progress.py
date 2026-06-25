@@ -6,8 +6,6 @@ from typing import Any
 
 from core.models import NewsItem
 
-_PREVIEW_LEN = 160
-
 _NODE_LABELS: dict[str, str] = {
     "collector": "Collector",
     "filtering": "Filtering",
@@ -23,27 +21,19 @@ _NODE_LABELS: dict[str, str] = {
 }
 
 
-def _preview(text: str, max_len: int = _PREVIEW_LEN) -> str:
-    clean = " ".join(text.split())
-    if len(clean) <= max_len:
-        return clean
-    return clean[: max_len - 1] + "…"
-
-
 def _out(message: str) -> None:
     print(message, flush=True)
 
 
 def print_workflow_start() -> None:
-    _out("\n▶ Workflow started\n")
+    _out("▶ Started\n")
 
 
 def print_workflow_end(*, success: bool, error: str | None = None) -> None:
     if success:
-        _out("\n✅ Workflow finished — post sent to the work group for review.")
-        _out("   Press Publish in Telegram to post to the channel.\n")
+        _out("✅ Done — check the work group, press Publish to post.\n")
     else:
-        _out(f"\n❌ Workflow failed: {error or 'unknown error'}\n")
+        _out(f"❌ Failed: {error or 'unknown error'}\n")
 
 
 def _format_node_result(node: str, update: dict[str, Any]) -> list[str]:
@@ -51,69 +41,53 @@ def _format_node_result(node: str, update: dict[str, Any]) -> list[str]:
 
     if node == "collector":
         count = len(update.get("all_news_items", []))
-        lines.append(f"{count} fresh article(s) collected")
+        lines.append(f"{count} article(s)")
 
     elif node == "filtering":
         item: NewsItem | None = update.get("selected_news_item")
         if item:
-            lines.append(f"selected: {_preview(item.title, 100)}")
-            lines.append(f"source: {item.source}")
+            lines.append(item.title)
+            lines.append(item.source)
         else:
-            lines.append("no suitable article in this rubric")
+            lines.append("nothing selected")
 
     elif node == "increment_retry":
-        attempt = update.get("retry_count", "?")
-        lines.append(f"switching rubric (attempt {attempt})")
+        lines.append(f"attempt {update.get('retry_count', '?')}")
 
     elif node == "duplicate_check":
-        if update.get("is_duplicate"):
-            lines.append("duplicate found — will try another article/rubric")
-        else:
-            lines.append("article is unique")
+        lines.append("duplicate" if update.get("is_duplicate") else "unique")
 
     elif node == "planner":
         plan = update.get("post_plan", "")
-        if plan:
-            lines.append(f"plan ready ({len(plan)} chars)")
-            lines.append(_preview(plan))
+        lines.append("ready" if plan else "empty")
 
     elif node == "writer":
         post = update.get("english_post", "")
-        if post:
-            lines.append(f"English post ({len(post)} chars)")
-            lines.append(_preview(post))
+        lines.append(f"{len(post)} chars" if post else "empty")
 
     elif node == "translator":
         post = update.get("russian_post", "")
-        if post:
-            lines.append(f"Russian post ({len(post)} chars)")
-            lines.append(_preview(post))
+        lines.append(f"{len(post)} chars" if post else "empty")
 
     elif node == "smm":
         post = update.get("final_post", "")
-        if post:
-            lines.append(f"polished post ({len(post)} chars)")
-            lines.append(_preview(post))
+        lines.append(f"{len(post)} chars" if post else "empty")
 
     elif node == "reviewer":
-        lines.append("post sent to work group with Publish / Reject buttons")
+        lines.append("sent for moderation")
 
     elif node == "copywriter":
         article = update.get("long_read_article", "")
-        if article:
-            lines.append(f"long-read article ({len(article)} chars)")
+        lines.append(f"{len(article)} chars" if article else "empty")
 
     elif node == "internal_publisher":
-        lines.append("long-read .md file sent to work group")
+        lines.append(".md sent")
 
     return lines
 
 
 def print_node_complete(node: str, update: dict[str, Any]) -> None:
     label = _NODE_LABELS.get(node, node)
-    _out(f"● {label}")
-
-    for line in _format_node_result(node, update):
-        _out(f"  {line}")
-
-    _out("")
+    details = _format_node_result(node, update)
+    suffix = f" — {', '.join(details)}" if details else ""
+    _out(f"● {label}{suffix}")
